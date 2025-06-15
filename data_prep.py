@@ -30,11 +30,8 @@ class DataPreparer:
             raise ValueError("The platform DataFrame does not contain 'GENE_SYMBOL' column.")
         
         filtered = self.platform_df[self.platform_df['GENE_SYMBOL'].isin(gene_symbols)]
-        probe_ids = filtered['SPOT_ID'].tolist()
-        gene_symbols = filtered['GENE_SYMBOL'].tolist()
-        # for multiple gene support, we create a mapping
-        self.gene_map = dict(zip(gene_symbols, probe_ids))
-        self.filtered_df = self.df[self.df['ID_REF'].isin(probe_ids)]
+        self.probe_ids = filtered['SPOT_ID'].tolist()
+        self.filtered_df = self.df[self.df['ID_REF'].isin(self.probe_ids)]
 
 
     def load_sample_map(self, sample_file):
@@ -80,12 +77,8 @@ class DataPreparer:
         df_t[['group', 'sample']] = df_t['group_and_sample'].str.extract(r'(\w+)_S#([A-Z]\d)')
         df_t['sample_pair'] = df_t['sample'].str[0]
 
-        # Group and compute statistics
-        val = df_t.groupby(['group', 'sample_pair', 'time'])
-        #create a new empty dataframe to hold the results
-        for spot_id in self.gene_map.values():
-            return val[spot_id].agg(['mean', 'std']).reset_index()
-        return pd.DataFrame()
+        # Group and compute statistics # takes the first element if there are multiple probes for a given gene symbol TODO fix this
+        return df_t.groupby(['group', 'sample_pair', 'time'])[self.probe_ids[0]].agg(['mean', 'std']).reset_index()
 
     def set_time(self):
         """
@@ -127,10 +120,10 @@ if __name__ == "__main__":
 
     dp = DataPreparer(matrix_file, platform_file)
     dp.load_data()
+
     dp.filter_by_gene_symbol(['PER2'])
     dp.load_sample_map(sample_file)
 
-    stats = dp.stats()
     df = dp.set_time()
 
     print(df.head(30))
