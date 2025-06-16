@@ -24,13 +24,21 @@ class DataPreparer:
 
     def filter_by_gene_symbol(self, gene_symbols):
         """
-        Filter the DataFrame by gene symbols.
+        Filter the DataFrame by gene symbols and store a mapping of probe_id to gene_symbol.
         """
         if 'GENE_SYMBOL' not in self.platform_df.columns:
             raise ValueError("The platform DataFrame does not contain 'GENE_SYMBOL' column.")
         
+        # Filter platform_df by the given gene symbols
         filtered = self.platform_df[self.platform_df['GENE_SYMBOL'].isin(gene_symbols)]
+        
+        # Store probe IDs and their corresponding gene symbols
         self.probe_ids = filtered['SPOT_ID'].tolist()
+        
+        # Create a map where the key is probe_id and the value gene_symbol
+        self.gene_map = dict(zip(filtered['SPOT_ID'], filtered['GENE_SYMBOL']))
+        
+        # Filter the expression matrix by the probe IDs
         self.filtered_df = self.df[self.df['ID_REF'].isin(self.probe_ids)]
 
 
@@ -64,7 +72,6 @@ class DataPreparer:
 
         # Sort by metadata
         df_t = df_t.sort_values(by=['group_and_sample', 'time'], ascending=[True, True]).reset_index(drop=True)
-        #print(df_t.head())  # Debugging line to check the transposed data
         return df_t
 
     def compute_mean(self):
@@ -81,14 +88,15 @@ class DataPreparer:
         values = []
         for probe_id in self.probe_ids:
             if probe_id in df_t.columns:
-                values.append(df_t.groupby(['group', 'sample_pair', 'time'])[probe_id].agg(['mean', 'std']).reset_index())
+                values.append(df_t.groupby(['group', 'sample_pair', 'time'])[probe_id]
+                              .agg(['mean', 'std']).reset_index().rename(columns={'mean': probe_id}))
         return values
 
     def add_datetime(self):
         """
         Add datetime information based on group and sample index.
+        Returns a list of DataFrames with datetime and gene symbol and probe_id.
         """
-        df_list = self.compute_mean()
 
         # Define base dates for each group
         base_dates = {
@@ -100,8 +108,11 @@ class DataPreparer:
             'R': datetime(2024, 2, 20),
         }
 
+        # Create a list to store DataFrames and its corresponding gene symbols
+        df_list = []
+
         # Compute sample index and base date
-        for df in df_list:
+        for df in self.compute_mean():
             df['sample_index'] = df['sample_pair'].apply(lambda x: ord(x) - ord('A'))
             df['base_date'] = df['group'].map(base_dates)
 
@@ -114,4 +125,16 @@ class DataPreparer:
                 return None
 
             df['datetime'] = df.apply(compute_datetime, axis=1)
+
+            probe_id = None
+            for column_name in df.columns:
+            # if the column name exists in the gene_map as one of the probe_ids 
+                if column_name in self.gene_map:
+                    probe_id = column_name
+                else:
+                    continue
+        
+            # Add the DataFrame and gene_symbol to the dictionary
+            df_list.append({'df': df, 'gene_symbol': self.gene_map[probe_id], 'probe_id': probe_id})
+
         return df_list
