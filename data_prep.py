@@ -77,14 +77,18 @@ class DataPreparer:
         df_t[['group', 'sample']] = df_t['group_and_sample'].str.extract(r'(\w+)_S#([A-Z]\d)')
         df_t['sample_pair'] = df_t['sample'].str[0]
 
-        # Group and compute statistics # takes the first element if there are multiple probes for a given gene symbol TODO fix this
-        return df_t.groupby(['group', 'sample_pair', 'time'])[self.probe_ids[0]].agg(['mean', 'std']).reset_index()
+        # Group and compute statistics for each probe_id
+        values = []
+        for probe_id in self.probe_ids:
+            if probe_id in df_t.columns:
+                values.append(df_t.groupby(['group', 'sample_pair', 'time'])[probe_id].agg(['mean', 'std']).reset_index())
+        return values
 
     def add_datetime(self):
         """
         Add datetime information based on group and sample index.
         """
-        df = self.compute_mean()
+        df_list = self.compute_mean()
 
         # Define base dates for each group
         base_dates = {
@@ -97,16 +101,17 @@ class DataPreparer:
         }
 
         # Compute sample index and base date
-        df['sample_index'] = df['sample_pair'].apply(lambda x: ord(x) - ord('A'))
-        df['base_date'] = df['group'].map(base_dates)
+        for df in df_list:
+            df['sample_index'] = df['sample_pair'].apply(lambda x: ord(x) - ord('A'))
+            df['base_date'] = df['group'].map(base_dates)
 
-        # Compute datetime
-        def compute_datetime(row):
-            if row['base_date'] is not None:
-                date_with_offset = row['base_date'] + timedelta(days=row['sample_index'])
-                time_part = datetime.strptime(row['time'], "%H:%M").time()
-                return datetime.combine(date_with_offset, time_part)
-            return None
+            # Compute datetime
+            def compute_datetime(row):
+                if row['base_date'] is not None:
+                    date_with_offset = row['base_date'] + timedelta(days=row['sample_index'])
+                    time_part = datetime.strptime(row['time'], "%H:%M").time()
+                    return datetime.combine(date_with_offset, time_part)
+                return None
 
-        df['datetime'] = df.apply(compute_datetime, axis=1)
-        return df
+            df['datetime'] = df.apply(compute_datetime, axis=1)
+        return df_list
