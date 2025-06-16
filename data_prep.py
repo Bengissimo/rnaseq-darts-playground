@@ -14,7 +14,7 @@ class DataPreparer:
         self.filtered_df = None
         self.sample_map = None
 
-    def load_data(self):
+    def load_expression_and_platform_data(self):
         """
         Load the expression matrix and platform information.
         """
@@ -34,7 +34,7 @@ class DataPreparer:
         self.filtered_df = self.df[self.df['ID_REF'].isin(self.probe_ids)]
 
 
-    def load_sample_map(self, sample_file):
+    def load_sample_metadata(self, sample_file):
         """
         Load the sample map from a file.
         """
@@ -44,7 +44,7 @@ class DataPreparer:
             for _, row in samples.iterrows()
         }
 
-    def get_transposed_data(self):
+    def transpose_filtered_data(self):
         """
         Transpose the DataFrame to have samples as rows and genes as columns,
         and add metadata columns.
@@ -67,11 +67,11 @@ class DataPreparer:
         #print(df_t.head())  # Debugging line to check the transposed data
         return df_t
 
-    def stats(self):
+    def compute_mean(self):
         """
         Compute mean and standard deviation for a specific gene across groups and times.
         """
-        df_t = self.get_transposed_data()
+        df_t = self.transpose_filtered_data()
 
         # Extract group and sample information
         df_t[['group', 'sample']] = df_t['group_and_sample'].str.extract(r'(\w+)_S#([A-Z]\d)')
@@ -80,11 +80,11 @@ class DataPreparer:
         # Group and compute statistics # takes the first element if there are multiple probes for a given gene symbol TODO fix this
         return df_t.groupby(['group', 'sample_pair', 'time'])[self.probe_ids[0]].agg(['mean', 'std']).reset_index()
 
-    def set_time(self):
+    def add_datetime(self):
         """
         Add datetime information based on group and sample index.
         """
-        df = self.stats()
+        df = self.compute_mean()
 
         # Define base dates for each group
         base_dates = {
@@ -110,20 +110,3 @@ class DataPreparer:
 
         df['datetime'] = df.apply(compute_datetime, axis=1)
         return df
-
-
-# Example usage
-if __name__ == "__main__":
-    matrix_file = "data/GSE253864_series_matrix.txt.gz"
-    platform_file = "data/GPL15331-30377.txt"
-    sample_file = "data/sample.csv"
-
-    dp = DataPreparer(matrix_file, platform_file)
-    dp.load_data()
-
-    dp.filter_by_gene_symbol(['PER2'])
-    dp.load_sample_map(sample_file)
-
-    df = dp.set_time()
-
-    print(df.head(30))
