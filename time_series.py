@@ -36,19 +36,31 @@ class TimeSeriesForecasting:
         self.data_preparer = dp.DataPreparer(matrix_file, platform_file, sample_file)
         self.df_list = self.data_preparer.prepare_data(gene_symbols)
 
+    def prepare_time_series(self, item):
+        """
+        Prepare the TimeSeries object and split it into train and test sets.
+
+        Args:
+            item (dict): Dictionary containing the DataFrame, probe_id, and gene_symbol.
+
+        Returns:
+            tuple: Train and test TimeSeries objects.
+        """
+        ts = TimeSeries.from_dataframe(
+            item['df'], time_col='datetime', value_cols=['median'], freq='4h', fill_missing_dates=True
+        )
+        filled_ts = du.missing_values.fill_missing_values(ts, method='linear')
+        filled_ts = filled_ts.astype(np.float32)
+
+        train, test = filled_ts['median'].split_before(0.8)  # 80% train, 20% test
+        return train, test
+    
     def run_classical_models(self):
         """
         Run classical forecasting models and plot results.
         """
         for item in self.df_list:
-            # Create a TimeSeries object
-            ts = TimeSeries.from_dataframe(
-                item['df'], time_col='datetime', value_cols=['median'], freq='4h', fill_missing_dates=True
-            )
-            filled_ts = du.missing_values.fill_missing_values(ts, method='linear')
-            filled_ts = filled_ts.astype(np.float32)
-
-            train, test = filled_ts['median'].split_before(0.8)  # 80% train, 20% test
+            train, test = self.prepare_time_series(item)
 
             # Classical models
             models = {
@@ -80,6 +92,40 @@ class TimeSeriesForecasting:
 
             fig.tight_layout()
         plt.show()
+    
+    def run_deep_learning_models(self):
+        """
+        Run deep learning forecasting models and plot results.
+        """
+        for item in self.df_list:
+            train, test = self.prepare_time_series(item)
+
+            # Deep learning models
+            models = {
+                "NBEATS": NBEATSModel(input_chunk_length=24, output_chunk_length=12, n_epochs=50)
+            }
+
+            fig = plt.figure(figsize=(20, 10))
+            for i, (name, model) in enumerate(models.items()):
+                print(f"Processing {name} for {item['probe_id']} {item['gene_symbol']} ...")
+                model.fit(series=train)
+                pred = model.predict(n=len(test))
+
+                # Calculate metrics
+                mape_value = round(mape(test, pred), 2)
+                mse_value = round(mse(test, pred), 2)
+
+                # Plot results
+                ax = fig.add_subplot(1, len(models), i + 1)
+                train.plot(ax=ax, label="Train", lw=1)
+                test.plot(ax=ax, label="Test", lw=1)
+                pred.plot(ax=ax, label=f"{name} Prediction", lw=1.5)
+                ax.set_title(f"{item['probe_id']}_{item['gene_symbol']} - {name}\nMAPE: {mape_value}, MSE: {mse_value}")
+                ax.legend()
+
+            fig.tight_layout()
+        plt.show()
+
 
 
 # Example usage
@@ -91,4 +137,4 @@ if __name__ == "__main__":
 
     ts_forecasting = TimeSeriesForecasting(MATRIX_FILE, PLATFORM_FILE, SAMPLE_FILE, GENE_SYMBOLS)
     ts_forecasting.run_classical_models()
-    # ts_forecasting.run_deep_learning_models()
+    #ts_forecasting.run_deep_learning_models()
