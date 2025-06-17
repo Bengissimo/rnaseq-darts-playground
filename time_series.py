@@ -15,7 +15,6 @@ from darts.metrics import mape, mse
 from darts import utils as du
 
 
-import pandas as pd
 
 
 # Example usage
@@ -24,22 +23,16 @@ if __name__ == "__main__":
     platform_file = "data/GPL15331-30377.txt"
     sample_file = "data/sample.csv"
 
-    d = dp.DataPreparer(matrix_file, platform_file)
-    d.load_expression_and_platform_data()
-
-   # TODO give gene symbol as argument
-    d.filter_by_gene_symbol(['PER1', 'PER2'])
-    d.load_sample_metadata(sample_file)
-
-    df_list = d.add_datetime()
+    d = dp.DataPreparer(matrix_file, platform_file, sample_file)
+    df_list = d.prepare_data(['PER1', 'PER2'])  # TODO give gene symbol as argument
 
     for item in df_list:
         # Create a TimeSeries object
-        ts = TimeSeries.from_dataframe(item['df'], time_col='datetime', value_cols=item['probe_id'], freq='4h', fill_missing_dates=True)
+        ts = TimeSeries.from_dataframe(item['df'], time_col='datetime', value_cols=['median'], freq='4h', fill_missing_dates=True)
         filled_ts = du.missing_values.fill_missing_values(ts, method='linear')
         filled_ts = filled_ts.astype(np.float32)
 
-        train, test = filled_ts[item['probe_id']].split_before(0.8)  # 80% train, 20% test
+        train, test = filled_ts['median'].split_before(0.8)  # 80% train, 20% test
 
         # Classical models
         model0 = LinearRegressionModel(lags=24)
