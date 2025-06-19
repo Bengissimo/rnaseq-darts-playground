@@ -15,7 +15,7 @@ pip install -r requirements.txt
 Use the command line to run forecasting on selected genes:
 
 ```bash
-python main.py --genes GENE1 GENE2 --mode classical --plots
+python3 time_series.py --genes GENE1 GENE2 --mode classical --plots
 ```
 
 * `--genes`: space-separated list of gene symbols (e.g. `PER1 NR1D1`)
@@ -25,7 +25,7 @@ python main.py --genes GENE1 GENE2 --mode classical --plots
 ### Example:
 
 ```bash
-python time_series.py --genes PER1 --mode deep_learning --plots
+python3 time_series.py --genes PER1 --mode deep_learning --plots
 ```
 
 ### Dataset: GSE253864 - Human Blood Transcriptome During Bed Rest
